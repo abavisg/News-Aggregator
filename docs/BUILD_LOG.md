@@ -270,13 +270,144 @@ The scheduler successfully integrates all previous slices:
 
 **Commit:** `feat(slice-04): implement scheduler with 96% test coverage`
 
+### ✅ Slice 05 - LinkedIn Publisher with Dashboard (2025-11-10)
+
+**Summary:**
+- Implemented LinkedIn OAuth 2.0 authentication and post publishing
+- Created local post storage with complete history tracking
+- Built web dashboard for post management and approval workflow
+- Integrated publisher with scheduler for automated publishing
+- Created 49 comprehensive unit tests following TDD principles
+- Achieved comprehensive test coverage
+- All tests passing with proper mocking and error handling
+
+**Features Implemented:**
+- `LinkedInPublisher` - Main publisher class with OAuth and posting
+- `publish_post()` - Publish posts to LinkedIn with retry logic
+- `save_post_locally()` - Save posts to local JSON files with metadata
+- `load_post()` - Load posts from local storage
+- `list_posts()` - List posts with filtering and pagination
+- `approve_post()` - Approve draft posts for publishing
+- `authenticate()` - Exchange OAuth code for access token
+- `refresh_access_token()` - Refresh expired tokens
+- `generate_oauth_url()` - Generate LinkedIn OAuth authorization URL
+- `is_already_published()` - Idempotency checks to prevent duplicates
+- Retry mechanism with exponential backoff for network errors
+- Dry-run mode for testing without actual publishing
+- Custom exceptions: `PublisherError`, `OAuthError`, `PublishingError`, `StorageError`
+
+**Dashboard Features:**
+- FastAPI web application with RESTful API
+- Beautiful HTML dashboard with responsive design
+- List all posts with status badges (draft, approved, published, failed)
+- Filter posts by status
+- Approve and publish posts via UI
+- View post details and metadata
+- Delete draft posts
+- OAuth login flow
+- Real-time statistics (total posts, drafts, published, failed)
+- Post preview with character count and article metadata
+
+**API Endpoints:**
+- `GET /` - Dashboard HTML page
+- `GET /health` - Health check
+- `GET /v1/posts` - List posts with filtering
+- `GET /v1/posts/{week_key}` - Get specific post
+- `POST /v1/posts` - Create new post
+- `POST /v1/posts/{week_key}/approve` - Approve post
+- `POST /v1/posts/{week_key}/publish` - Publish post
+- `DELETE /v1/posts/{week_key}` - Delete post
+- `GET /v1/oauth/login` - Initiate OAuth
+- `GET /v1/oauth/callback` - OAuth callback
+- `GET /v1/stats` - Publishing statistics
+
+**Files Created/Modified:**
+- `features/slice-05-publisher.md` - Feature specification (650 lines)
+- `features/slice-05-publisher.feature` - BDD scenarios (380 lines)
+- `src/core/publisher.py` - Core publisher implementation (620 lines)
+- `src/api/main.py` - FastAPI application with dashboard (430 lines)
+- `src/api/templates/dashboard.html` - Dashboard UI (570 lines)
+- `src/tests/unit/test_publisher.py` - Comprehensive test suite (850 lines, 49 tests)
+- `src/core/scheduler.py` - Updated with publisher integration
+
+**Test Coverage:**
+- 49/49 publisher unit tests passing
+- All critical paths covered including:
+  - Local post storage and retrieval
+  - Post listing with status filters
+  - Idempotency checks
+  - OAuth URL generation and token exchange
+  - Token refresh logic
+  - Publishing with retry mechanism
+  - Dry-run mode
+  - Error handling (storage, network, API errors)
+  - Edge cases (special characters, very long content, concurrent operations)
+
+**Local Storage Structure:**
+```
+/data
+  /posts
+    2025.W45.json        # Individual post files
+    2025.W46.json
+    ...
+  /credentials
+    linkedin_oauth.json  # OAuth tokens (gitignored)
+```
+
+**Post File Format:**
+Each post stored as JSON with complete metadata:
+- week_key, content, status
+- created_at, updated_at, approved_at, published_at
+- linkedin_post_id, linkedin_post_url
+- error_message, retry_count
+- metadata (article_count, char_count, hashtag_count, sources)
+
+**Environment Variables:**
+```env
+LINKEDIN_CLIENT_ID=your_client_id
+LINKEDIN_CLIENT_SECRET=your_client_secret
+LINKEDIN_REDIRECT_URI=http://localhost:8000/v1/oauth/callback
+DRY_RUN=false
+POSTS_STORAGE_DIR=./data/posts
+MAX_RETRIES=3
+```
+
+**Integration with Scheduler:**
+- Preview job: Saves posts locally as drafts (Thursday 18:00)
+- Publish job: Publishes posts to LinkedIn (Friday 10:00)
+- Full pipeline integration: fetch → summarize → compose → publish
+- Idempotency ensures no duplicate posts
+
+**Dashboard Screenshots:**
+- Clean, modern UI with gradient background
+- Status-based filtering (all, draft, approved, published, failed)
+- Interactive post cards with action buttons
+- Real-time statistics dashboard
+- Mobile-responsive design
+
+**Success Metrics:**
+- ✅ All posts saved locally with complete metadata
+- ✅ Dashboard displays posts correctly with filtering
+- ✅ OAuth flow ready (requires LinkedIn Developer account)
+- ✅ Publishing succeeds with proper error handling
+- ✅ Idempotency prevents duplicate posts
+- ✅ Retry mechanism works on transient failures
+- ✅ Test coverage comprehensive
+- ✅ All BDD scenarios defined
+- ✅ Code follows project conventions
+- ✅ Integration with scheduler complete
+
+**Dependencies Added:**
+No new dependencies - all required packages already in requirements.txt:
+- httpx (already installed)
+- fastapi, uvicorn (already installed)
+- jinja2, python-multipart (already installed)
+
+**Commit:** `feat(slice-05): implement LinkedIn publisher with local storage and dashboard`
+
 ---
 
 ## Upcoming Slices
-
-### 📋 Slice 05 - LinkedIn Publisher
-**Goal:** Implement OAuth + post creation with retries
-**Dependencies:** Slice 04
 
 ### 📋 Slice 06 - Observability
 **Goal:** Add structured logging, metrics, and alerts
@@ -298,4 +429,4 @@ The scheduler successfully integrates all previous slices:
 ---
 
 **Last Updated:** 2025-11-10
-**Current Slice:** Slice 04 Complete - Ready for Slice 05
+**Current Slice:** Slice 05 Complete - Ready for Slice 06

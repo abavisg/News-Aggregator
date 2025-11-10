@@ -20,6 +20,7 @@ import pytz
 from src.core.fetcher import fetch_news
 from src.core.summarizer import summarize_article
 from src.core.composer import compose_weekly_post
+from src.core.publisher import LinkedInPublisher
 
 # Setup structured logging
 log = structlog.get_logger(__name__)
@@ -85,12 +86,18 @@ class NewsAggregatorScheduler:
         # Initialize scheduler
         self.scheduler = self._create_scheduler()
 
+        # Initialize publisher
+        self.publisher = LinkedInPublisher(
+            dry_run=os.getenv("DRY_RUN", "false").lower() == "true"
+        )
+
         log.info(
             "Scheduler initialized",
             timezone=timezone,
             preview_time=preview_time,
             publish_time=publish_time,
-            jobstore_type=jobstore_type
+            jobstore_type=jobstore_type,
+            publisher_dry_run=self.publisher.dry_run
         )
 
     def _create_scheduler(self) -> BackgroundScheduler:
@@ -216,7 +223,7 @@ class NewsAggregatorScheduler:
         """
         Execute preview generation workflow.
 
-        Runs the full pipeline and logs results without publishing.
+        Runs the full pipeline, saves post locally as draft, but does not publish.
 
         Returns:
             Job execution result dictionary
@@ -231,10 +238,51 @@ class NewsAggregatorScheduler:
 
         result = self.execute_pipeline(week_key, is_preview=True)
 
+        # Save post locally as draft for preview
+        if result["status"] == "success" and result.get("post_created"):
+            try:
+                post_data = result.get("post", {})
+                post_content = post_data.get("content", "")
+
+                # Build metadata
+                metadata = {
+                    "article_count": result.get("articles_summarized", 0),
+                    "char_count": post_data.get("character_count", 0),
+                    "hashtag_count": len(post_data.get("hashtags", [])),
+                    "sources": [article.get("source") for article in post_data.get("articles", []) if article.get("source")],
+                }
+
+                # Save post locally (status: draft)
+                file_path = self.publisher.save_post_locally(
+                    week_key=week_key,
+                    content=post_content,
+                    status="draft",
+                    metadata=metadata
+                )
+
+                result["saved_locally"] = True
+                result["file_path"] = file_path
+
+                log.info(
+                    "Preview post saved locally",
+                    week_key=week_key,
+                    file_path=file_path
+                )
+
+            except Exception as e:
+                log.error(
+                    "Failed to save preview post locally",
+                    week_key=week_key,
+                    error=str(e)
+                )
+                result["saved_locally"] = False
+                result["save_error"] = str(e)
+
         log.info(
             "Preview job completed",
             week_key=week_key,
             status=result["status"],
+            saved_locally=result.get("saved_locally", False),
             duration_seconds=result["duration_seconds"]
         )
 
@@ -244,7 +292,7 @@ class NewsAggregatorScheduler:
         """
         Execute publish workflow.
 
-        Runs the full pipeline and prepares post for publication.
+        Runs the full pipeline, saves post locally, and publishes to LinkedIn.
 
         Returns:
             Job execution result dictionary
@@ -259,10 +307,60 @@ class NewsAggregatorScheduler:
 
         result = self.execute_pipeline(week_key, is_preview=False)
 
+        # If pipeline succeeded and post was created, publish it
+        if result["status"] == "success" and result.get("post_created"):
+            try:
+                post_data = result.get("post", {})
+                post_content = post_data.get("content", "")
+
+                # Build metadata
+                metadata = {
+                    "article_count": result.get("articles_summarized", 0),
+                    "char_count": post_data.get("character_count", 0),
+                    "hashtag_count": len(post_data.get("hashtags", [])),
+                    "sources": [article.get("source") for article in post_data.get("articles", []) if article.get("source")],
+                }
+
+                # Publish post
+                publish_result = self.publisher.publish_post(
+                    week_key=week_key,
+                    content=post_content,
+                    metadata=metadata
+                )
+
+                result["published"] = publish_result["success"]
+                result["publish_status"] = publish_result["status"]
+                result["post_url"] = publish_result.get("post_url")
+                result["linkedin_post_id"] = publish_result.get("post_id")
+
+                if not publish_result["success"]:
+                    result["publish_error"] = publish_result.get("error")
+                    log.warning(
+                        "Post publishing failed",
+                        week_key=week_key,
+                        error=publish_result.get("error")
+                    )
+                else:
+                    log.info(
+                        "Post published successfully",
+                        week_key=week_key,
+                        post_url=publish_result.get("post_url")
+                    )
+
+            except Exception as e:
+                log.error(
+                    "Failed to publish post",
+                    week_key=week_key,
+                    error=str(e)
+                )
+                result["published"] = False
+                result["publish_error"] = str(e)
+
         log.info(
             "Publish job completed",
             week_key=week_key,
             status=result["status"],
+            published=result.get("published", False),
             duration_seconds=result["duration_seconds"]
         )
 
