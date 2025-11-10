@@ -38,6 +38,16 @@ from src.core.publisher import (
 
 
 @pytest.fixture
+def mock_credentials():
+    """Mock OAuth credentials for testing - clearly fake values"""
+    return {
+        "client_id": "MOCK_CLIENT_ID_FOR_TESTING",
+        "client_secret": "MOCK_CLIENT_SECRET_FOR_TESTING",
+        "redirect_uri": "http://localhost:8000/callback"
+    }
+
+
+@pytest.fixture
 def temp_posts_dir(tmp_path):
     """Create temporary posts directory"""
     posts_dir = tmp_path / "posts"
@@ -54,12 +64,12 @@ def temp_credentials_dir(tmp_path):
 
 
 @pytest.fixture
-def publisher(temp_posts_dir, temp_credentials_dir):
+def publisher(temp_posts_dir, temp_credentials_dir, mock_credentials):
     """Create publisher instance with temp directories"""
     return LinkedInPublisher(
-        client_id="test_client_id_1234567890",
-        client_secret="test_client_secret_abcdefghij",
-        redirect_uri="http://localhost:8000/callback",
+        client_id=mock_credentials["client_id"],
+        client_secret=mock_credentials["client_secret"],
+        redirect_uri=mock_credentials["redirect_uri"],
         posts_dir=str(temp_posts_dir),
         credentials_dir=str(temp_credentials_dir),
         dry_run=False,
@@ -67,11 +77,11 @@ def publisher(temp_posts_dir, temp_credentials_dir):
 
 
 @pytest.fixture
-def dry_run_publisher(temp_posts_dir, temp_credentials_dir):
+def dry_run_publisher(temp_posts_dir, temp_credentials_dir, mock_credentials):
     """Create publisher in dry-run mode"""
     return LinkedInPublisher(
-        client_id="test_client_id",
-        client_secret="test_client_secret",
+        client_id=mock_credentials["client_id"],
+        client_secret=mock_credentials["client_secret"],
         posts_dir=str(temp_posts_dir),
         credentials_dir=str(temp_credentials_dir),
         dry_run=True,
@@ -110,11 +120,11 @@ def sample_metadata():
 
 @pytest.fixture
 def mock_oauth_response():
-    """Mock OAuth token response"""
+    """Mock OAuth token response - clearly fake values"""
     return {
-        "access_token": "AQVdDPdL9pFKxMjE2MDEzNDg",
+        "access_token": "MOCK_ACCESS_TOKEN_FOR_TESTING",
         "expires_in": 5184000,
-        "refresh_token": "AQWxPqNjm8gF7Ys9hK",
+        "refresh_token": "MOCK_REFRESH_TOKEN_FOR_TESTING",
         "token_type": "Bearer",
         "scope": "w_member_social r_liteprofile",
     }
@@ -132,11 +142,11 @@ def mock_linkedin_post_response():
 # Test: Publisher Initialization
 
 
-def test_publisher_initialization_with_explicit_params(temp_posts_dir, temp_credentials_dir):
+def test_publisher_initialization_with_explicit_params(temp_posts_dir, temp_credentials_dir, mock_credentials):
     """Test publisher initializes with explicit parameters"""
     pub = LinkedInPublisher(
-        client_id="test_client",
-        client_secret="test_secret",
+        client_id=mock_credentials["client_id"],
+        client_secret=mock_credentials["client_secret"],
         redirect_uri="http://localhost:8000/callback",
         posts_dir=str(temp_posts_dir),
         credentials_dir=str(temp_credentials_dir),
@@ -144,8 +154,8 @@ def test_publisher_initialization_with_explicit_params(temp_posts_dir, temp_cred
         max_retries=5,
     )
 
-    assert pub.client_id == "test_client"
-    assert pub.client_secret == "test_secret"
+    assert pub.client_id == mock_credentials["client_id"]
+    assert pub.client_secret == mock_credentials["client_secret"]
     assert pub.redirect_uri == "http://localhost:8000/callback"
     assert pub.dry_run is True
     assert pub.max_retries == 5
@@ -155,8 +165,8 @@ def test_publisher_initialization_with_explicit_params(temp_posts_dir, temp_cred
 
 def test_publisher_initialization_from_env(temp_posts_dir, temp_credentials_dir, monkeypatch):
     """Test publisher reads OAuth credentials from environment"""
-    monkeypatch.setenv("LINKEDIN_CLIENT_ID", "env_client_id")
-    monkeypatch.setenv("LINKEDIN_CLIENT_SECRET", "env_client_secret")
+    monkeypatch.setenv("LINKEDIN_CLIENT_ID", "MOCK_ENV_CLIENT_ID")
+    monkeypatch.setenv("LINKEDIN_CLIENT_SECRET", "MOCK_ENV_CLIENT_SECRET")
     monkeypatch.setenv("LINKEDIN_REDIRECT_URI", "http://example.com/callback")
 
     pub = LinkedInPublisher(
@@ -164,8 +174,8 @@ def test_publisher_initialization_from_env(temp_posts_dir, temp_credentials_dir,
         credentials_dir=str(temp_credentials_dir),
     )
 
-    assert pub.client_id == "env_client_id"
-    assert pub.client_secret == "env_client_secret"
+    assert pub.client_id == "MOCK_ENV_CLIENT_ID"
+    assert pub.client_secret == "MOCK_ENV_CLIENT_SECRET"
     assert pub.redirect_uri == "http://example.com/callback"
 
 
@@ -422,7 +432,7 @@ def test_generate_oauth_url(publisher):
     url = publisher.generate_oauth_url(state="test_state_123")
 
     assert "https://www.linkedin.com/oauth/v2/authorization" in url
-    assert "client_id=test_client_id" in url
+    assert "client_id=MOCK_CLIENT_ID_FOR_TESTING" in url
     assert "redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fcallback" in url
     assert "scope=w_member_social+r_liteprofile" in url
     assert "state=test_state_123" in url
@@ -458,8 +468,8 @@ def test_authenticate_success(publisher, mock_oauth_response, temp_credentials_d
 
         result = publisher.authenticate("auth_code_123")
 
-        assert result["access_token"] == "AQVdDPdL9pFKxMjE2MDEzNDg"
-        assert result["refresh_token"] == "AQWxPqNjm8gF7Ys9hK"
+        assert result["access_token"] == "MOCK_ACCESS_TOKEN_FOR_TESTING"
+        assert result["refresh_token"] == "MOCK_REFRESH_TOKEN_FOR_TESTING"
 
         # Verify credentials saved
         creds_file = temp_credentials_dir / "linkedin_oauth.json"
@@ -502,8 +512,8 @@ def test_refresh_access_token_success(publisher, mock_oauth_response, temp_crede
     """Test successful token refresh"""
     # Save initial credentials with refresh token
     initial_creds = {
-        "access_token": "old_token",
-        "refresh_token": "refresh_token_123",
+        "access_token": "MOCK_OLD_ACCESS_TOKEN",
+        "refresh_token": "MOCK_REFRESH_TOKEN",
         "expires_at": datetime.now(timezone.utc).timestamp() - 100,
     }
     with open(temp_credentials_dir / "linkedin_oauth.json", "w") as f:
@@ -573,7 +583,7 @@ def test_publish_post_success(
 
     # Save credentials
     creds = {
-        "access_token": "valid_token",
+        "access_token": "MOCK_VALID_TOKEN",
         "expires_at": datetime.now(timezone.utc).timestamp() + 3600,
     }
     with open(temp_credentials_dir / "linkedin_oauth.json", "w") as f:
@@ -602,7 +612,7 @@ def test_publish_post_network_error_retries(publisher, sample_post_content, temp
     week_key = "2025.W45"
 
     # Save credentials
-    creds = {"access_token": "valid_token"}
+    creds = {"access_token": "MOCK_VALID_TOKEN"}
     with open(temp_credentials_dir / "linkedin_oauth.json", "w") as f:
         json.dump(creds, f)
 
@@ -689,8 +699,8 @@ def test_retry_with_backoff_exponential_delay(publisher):
 def test_validate_oauth_credentials_valid():
     """Test validating valid OAuth credentials"""
     assert validate_oauth_credentials(
-        "client_id_1234567890",
-        "client_secret_abcdefghij"
+        "MOCK_CLIENT_ID_VALIDATION",
+        "MOCK_CLIENT_SECRET_VALIDATION"
     ) is True
 
 
