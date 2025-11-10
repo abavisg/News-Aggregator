@@ -1,6 +1,8 @@
 # Testing Strategy - Weekly Tech & AI Aggregator
 
-This document defines the TDD/BDD approach for the Weekly Tech & AI Aggregator project.
+This document defines the comprehensive TDD/BDD/E2E approach for the Weekly Tech & AI Aggregator project.
+
+**Last Updated:** 2025-11-10 (Amended to include BDD scenarios and Golden Path E2E tests)
 
 ---
 
@@ -12,36 +14,72 @@ This document defines the TDD/BDD approach for the Weekly Tech & AI Aggregator p
    - No production code without corresponding tests
 
 2. **Behavior-Driven Development (BDD)**
-   - Use Given/When/Then semantics in test docstrings
+   - Use Given/When/Then semantics in test docstrings and feature files
    - Focus on user outcomes, not implementation details
    - Tests should read like specifications
+   - **NEW:** Gherkin feature files for slice acceptance criteria
 
 3. **Test Isolation**
    - Each test is independent and can run in any order
    - Use mocks/stubs for external dependencies (network, AI, database)
    - Prefer in-memory SQLite for integration tests
 
+4. **Golden Path E2E Testing (NEW)**
+   - After each slice completion, run full pipeline E2E tests
+   - Verify integration of all completed slices
+   - Test the "happy path" from RSS feed to LinkedIn post
+   - Ensure no regressions in previously completed slices
+
 ---
 
 ## Test Structure
 
+### Test Pyramid
+
+```
+        /\         E2E Tests (Golden Path)
+       /  \        - Full pipeline integration
+      /    \       - Real external dependencies (mocked when necessary)
+     / E2E  \      - Run after each slice completion
+    /________\
+    |        |     Integration Tests
+    |  INT   |     - Multi-component integration
+    |________|     - Mocked external dependencies
+    |        |     BDD Scenarios
+    |  BDD   |     - Behavioral acceptance tests
+    |________|     - Gherkin feature files
+    |        |     Unit Tests
+    |  UNIT  |     - Fast, isolated functions
+    |________|     - Complete coverage of edge cases
+```
+
 ### Directory Layout
 ```
 /src/tests
-  /unit          # Fast, isolated tests for single functions
-  /integration   # Multi-component tests with real dependencies
-  /bdd           # Behavioral scenarios using behave (optional)
-  /fixtures      # Shared test data and factory functions
-  conftest.py    # pytest fixtures and configuration
+  /unit              # Fast, isolated tests for single functions
+  /integration       # Multi-component tests with real dependencies
+  /e2e               # End-to-end golden path tests (NEW)
+  /fixtures          # Shared test data and factory functions
+  conftest.py        # pytest fixtures and configuration
+
+/features            # BDD feature files (NEW)
+  /steps             # Step definitions for BDD scenarios
+  slice-01-fetcher.feature
+  slice-02-summarizer.feature
+  slice-03-composer.feature
+  golden-path.feature
+  environment.py     # Behave hooks and setup
 ```
 
 ### Test Markers
 Use pytest markers to categorize tests:
 ```python
-@pytest.mark.unit
-@pytest.mark.integration
-@pytest.mark.bdd
-@pytest.mark.slow
+@pytest.mark.unit         # Fast unit tests (< 1s each)
+@pytest.mark.integration  # Integration tests (< 5s each)
+@pytest.mark.e2e          # End-to-end tests (< 30s each)
+@pytest.mark.bdd          # BDD scenario tests
+@pytest.mark.slow         # Tests that take > 5s
+@pytest.mark.golden       # Golden path critical tests
 ```
 
 ---
@@ -216,38 +254,263 @@ def sample_articles():
 
 ---
 
-## BDD with Behave (Optional)
+## BDD with Behave (MANDATORY)
 
-For complex user scenarios:
+### Overview
+All slices MUST have BDD feature files that define acceptance criteria using Gherkin syntax. These serve as:
+- **Living documentation** of feature behavior
+- **Acceptance tests** for stakeholder approval
+- **Regression tests** to prevent breaking changes
+
+### Feature File Structure
 
 ```gherkin
-# features/weekly_summary.feature
-Feature: Weekly Tech Summary Generation
+# features/slice-01-fetcher.feature
+Feature: RSS Feed Fetcher
+  As a news aggregator system
+  I want to fetch and normalize articles from RSS feeds
+  So that I can process consistent article data
 
-  Scenario: Generate weekly LinkedIn post from valid articles
-    Given the system has fetched 15 tech articles from approved sources
-    When the weekly summarization job runs on Thursday at 18:00
-    Then a LinkedIn post draft is created
-    And the draft contains 3-6 highlighted articles
-    And the post length is under 3000 characters
-    And the post includes relevant hashtags
+  Scenario: Successfully fetch articles from multiple RSS feeds
+    Given the following RSS feed URLs:
+      | url                                    |
+      | https://techcrunch.com/feed/           |
+      | https://www.theverge.com/rss/index.xml |
+    When I fetch news from these sources
+    Then I should receive a list of articles
+    And each article should have required fields:
+      | field      |
+      | title      |
+      | link       |
+      | source     |
+      | date       |
+      | content    |
+    And the articles should be sorted by publication date
+
+  Scenario: Handle invalid RSS feed gracefully
+    Given an invalid RSS feed URL "https://invalid-domain.com/feed"
+    When I attempt to fetch news from this source
+    Then the system should not raise an exception
+    And the result should be an empty list
+    And an error should be logged
+
+  Scenario: Parse various date formats
+    Given articles with different date formats:
+      | format           | example                    |
+      | RFC 822          | Mon, 10 Nov 2025 14:30:00  |
+      | ISO 8601         | 2025-11-10T14:30:00Z       |
+      | Custom           | November 10, 2025          |
+    When I normalize these articles
+    Then all dates should be converted to datetime objects
+    And dates should be timezone-aware
 ```
+
+### Running BDD Tests
+
+```bash
+# Run all BDD scenarios
+behave
+
+# Run specific feature
+behave features/slice-01-fetcher.feature
+
+# Run specific scenario by name
+behave -n "Successfully fetch articles"
+
+# Run with specific tags
+behave --tags=@slice01 --tags=@critical
+```
+
+---
+
+## Golden Path E2E Testing (CRITICAL)
+
+### Purpose
+After each slice is completed and merged, **MANDATORY** E2E tests verify that:
+1. The new slice integrates correctly with previous slices
+2. The full pipeline works end-to-end
+3. No regressions were introduced
+4. The "golden path" (happy flow) produces expected results
+
+### E2E Test Structure
+
+```python
+# src/tests/e2e/test_golden_path.py
+import pytest
+from datetime import datetime
+from src.core.fetcher import fetch_news
+from src.core.summarizer import summarize_article
+from src.core.composer import compose_weekly_post
+
+@pytest.mark.e2e
+@pytest.mark.golden
+class TestGoldenPathAfterSlice01:
+    """E2E tests after Slice 01 (Fetcher) completion"""
+
+    def test_fetch_returns_valid_articles(self):
+        """
+        Golden Path: Fetch articles from real RSS feeds
+
+        Given: Valid RSS feed URLs
+        When: fetch_news is called
+        Then: Articles are returned with all required fields
+        """
+        sources = [
+            "https://techcrunch.com/feed/",
+            "https://www.theverge.com/rss/index.xml"
+        ]
+
+        articles = fetch_news(sources)
+
+        assert len(articles) > 0, "Should fetch at least one article"
+        assert all('title' in a for a in articles), "All articles must have titles"
+        assert all('link' in a for a in articles), "All articles must have links"
+        assert all('source' in a for a in articles), "All articles must have sources"
+
+
+@pytest.mark.e2e
+@pytest.mark.golden
+class TestGoldenPathAfterSlice02:
+    """E2E tests after Slice 02 (Summarizer) completion"""
+
+    def test_fetch_and_summarize_pipeline(self, mock_claude_api):
+        """
+        Golden Path: Fetch → Summarize
+
+        Given: Fetched articles from RSS feeds
+        When: Articles are passed to summarizer
+        Then: Summaries are generated successfully
+        """
+        # Fetch real articles
+        sources = ["https://techcrunch.com/feed/"]
+        articles = fetch_news(sources)
+        assert len(articles) > 0
+
+        # Summarize first article
+        summary = summarize_article(articles[0])
+
+        assert summary is not None
+        assert len(summary) > 0
+        assert len(summary) <= 500  # Reasonable summary length
+
+
+@pytest.mark.e2e
+@pytest.mark.golden
+class TestGoldenPathAfterSlice03:
+    """E2E tests after Slice 03 (Composer) completion"""
+
+    def test_full_pipeline_fetch_summarize_compose(self, mock_claude_api):
+        """
+        Golden Path: Fetch → Summarize → Compose
+
+        Given: RSS feed sources
+        When: Full pipeline executes
+        Then: A valid LinkedIn post is generated
+        """
+        # Step 1: Fetch articles
+        sources = ["https://techcrunch.com/feed/"]
+        articles = fetch_news(sources)
+        assert len(articles) >= 3, "Need at least 3 articles"
+
+        # Step 2: Summarize articles
+        summaries = []
+        for article in articles[:5]:
+            summary = summarize_article(article)
+            summaries.append({
+                'article_url': article['link'],
+                'summary': summary,
+                'source': article['source'],
+                'published_at': article['date'],
+                'tokens_used': 150,
+                'provider': 'claude'
+            })
+
+        # Step 3: Compose LinkedIn post
+        post = compose_weekly_post(summaries)
+
+        # Assertions
+        assert post['content'] is not None
+        assert len(post['content']) > 0
+        assert post['character_count'] <= 3000
+        assert post['article_count'] >= 3
+        assert post['article_count'] <= 6
+        assert len(post['hashtags']) >= 5
+        assert len(post['hashtags']) <= 8
+        assert post['week_key'] is not None
+```
+
+### When to Run E2E Tests
+
+1. **After Each Slice Merge**: Immediately run all applicable golden path tests
+2. **Before Creating PR**: Run all E2E tests to ensure no regressions
+3. **Nightly Builds**: Run full E2E suite including external dependencies
+4. **Pre-Production**: Run complete E2E suite before deployment
+
+### E2E Test Execution
+
+```bash
+# Run only E2E tests
+pytest -m e2e
+
+# Run only golden path tests
+pytest -m golden
+
+# Run E2E tests after Slice 03
+pytest -m "e2e and golden" src/tests/e2e/test_golden_path.py::TestGoldenPathAfterSlice03
+
+# Run with verbose output
+pytest -m e2e -v -s
+
+# Run E2E with coverage
+pytest -m e2e --cov=src --cov-report=html
+```
+
+### E2E Test Data Strategy
+
+- **Use Real External Dependencies** (when practical):
+  - Real RSS feeds (with rate limiting)
+  - Mocked AI API calls (to avoid costs)
+  - Real date/time processing
+
+- **Fixture-based Test Data**:
+  - Known-good article samples for reproducibility
+  - Snapshot testing for complex outputs
+  - Golden files for expected results
 
 ---
 
 ## CI/CD Integration
 
 Tests run automatically on:
-- Every push to feature branches
-- Pull request creation
-- Scheduled weekly runs
+- Every push to feature branches (Unit + Integration)
+- Pull request creation (Unit + Integration + BDD)
+- After PR merge to main (Unit + Integration + BDD + E2E)
+- Scheduled nightly runs (Full suite including slow E2E)
 
 GitHub Actions workflow:
 ```yaml
-- name: Run tests
+# Unit and Integration tests on every push
+- name: Fast tests
   run: |
-    pytest --cov=src --cov-report=xml
-    pytest --markers=integration
+    pytest -m "unit or integration" --cov=src --cov-report=xml
+
+# BDD tests on PRs
+- name: BDD scenarios
+  run: |
+    behave --tags=~@wip
+
+# E2E Golden Path after merge
+- name: E2E Golden Path
+  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  run: |
+    pytest -m "e2e and golden" -v
+
+# Full suite nightly
+- name: Full test suite
+  if: github.event_name == 'schedule'
+  run: |
+    pytest --cov=src
+    behave
 ```
 
 ---
@@ -264,14 +527,54 @@ GitHub Actions workflow:
 
 ## Definition of Done (Testing)
 
-A feature is complete when:
-- ✅ All new code has corresponding tests
+A feature/slice is complete when:
+- ✅ All new code has corresponding unit tests (≥80% coverage)
+- ✅ BDD feature file created with acceptance scenarios
+- ✅ All BDD scenarios pass (green)
+- ✅ Golden path E2E test updated and passing
 - ✅ All tests pass locally and in CI
 - ✅ Coverage meets target for module
 - ✅ No regressions in existing tests
 - ✅ Tests follow naming and structure conventions
+- ✅ Integration with previous slices verified
 
 ---
 
-**Last Updated:** 2025-11-10
+## Summary: Test Execution After Each Slice
+
+After completing a slice, run tests in this order:
+
+```bash
+# 1. Unit tests (fast feedback)
+pytest -m unit -v
+
+# 2. Integration tests
+pytest -m integration -v
+
+# 3. BDD scenarios for the new slice
+behave features/slice-0X-*.feature
+
+# 4. Golden path E2E tests
+pytest -m "e2e and golden" -v
+
+# 5. Full test suite with coverage
+pytest --cov=src --cov-report=html --cov-report=term
+
+# 6. All BDD scenarios
+behave
+
+# 7. Review coverage report
+open htmlcov/index.html
+```
+
+**Expected Results:**
+- ✅ All tests passing
+- ✅ Coverage ≥ 80% for new code
+- ✅ No regressions in previous slices
+- ✅ BDD scenarios all green
+- ✅ Golden path E2E test passing
+
+---
+
+**Last Updated:** 2025-11-10 (Amended with BDD and E2E Golden Path strategy)
 **Maintained by:** Giorgos Ampavis
