@@ -186,13 +186,93 @@ This week's top stories in technology and artificial intelligence:
 
 **Commit:** `feat(slice-03): implement LinkedIn post composer with 90% test coverage`
 
+### ✅ Slice 04 - News Aggregation Scheduler (2025-11-10)
+
+**Summary:**
+- Implemented automated scheduler using APScheduler for weekly news aggregation
+- Created 34 comprehensive unit tests following TDD principles
+- Achieved 96% test coverage (target: ≥90%)
+- All tests passing with proper mocking and error handling
+
+**Features Implemented:**
+- `NewsAggregatorScheduler` - Main scheduler class managing weekly preview and publish jobs
+- `schedule_jobs()` - Configures recurring jobs (Thursday preview, Friday publish)
+- `run_preview_job()` - Executes preview generation workflow
+- `run_publish_job()` - Executes publish workflow
+- `execute_pipeline()` - Orchestrates full pipeline (fetch → summarize → compose)
+- `list_scheduled_jobs()` - Returns all scheduled jobs with metadata
+- `parse_schedule_time()` - Parses time strings (HH:MM) for scheduling
+- `get_week_key_for_date()` - Generates ISO week keys (YYYY.Www format)
+- Graceful startup and shutdown handling
+- Support for both memory and SQLite jobstores
+- Configurable timezone support (default: Europe/London)
+- Comprehensive error handling and logging
+
+**Files Created/Modified:**
+- `features/slice-04-scheduler.md` - Feature specification (557 lines)
+- `features/slice-04-scheduler.feature` - BDD scenarios (203 lines)
+- `src/core/scheduler.py` - Core scheduler implementation (445 lines)
+- `src/scripts/scheduler.py` - Entry point script (258 lines)
+- `src/tests/unit/test_scheduler.py` - Comprehensive test suite (537 lines, 34 tests)
+- `features/steps/scheduler_steps.py` - BDD step definitions (858 lines)
+
+**Test Coverage:**
+- 34/34 tests passing
+- 96% code coverage on scheduler.py
+- All critical paths covered including:
+  - Scheduler initialization with various configurations
+  - Job scheduling (preview and publish)
+  - Pipeline execution and orchestration
+  - Error handling (fetcher, summarizer, composer failures)
+  - Graceful shutdown and lifecycle management
+  - Helper functions (time parsing, week key generation)
+  - Timezone handling and persistence
+
+**Dependencies:**
+All dependencies already in requirements.txt:
+- `apscheduler==3.10.4` - Job scheduling framework
+- `pytz==2023.3` - Timezone support
+- `python-dotenv==1.0.0` - Environment configuration
+- `sqlalchemy==2.0.23` - SQLite jobstore persistence
+
+**Scheduler Configuration:**
+Jobs are scheduled for:
+- **Preview job:** Thursday at 18:00 (Europe/London)
+- **Publish job:** Friday at 10:00 (Europe/London)
+
+Configuration via environment variables:
+```env
+TIMEZONE=Europe/London
+PREVIEW_TIME=18:00
+PUBLISH_TIME=10:00
+JOBSTORE_TYPE=sqlite
+JOBSTORE_PATH=./scheduler.db
+RSS_SOURCES=https://techcrunch.com/feed/,https://www.theverge.com/rss/index.xml
+```
+
+**Usage Examples:**
+```bash
+# Start scheduler daemon
+python src/scripts/scheduler.py
+
+# Run preview job immediately
+python src/scripts/scheduler.py --preview
+
+# Run publish job immediately
+python src/scripts/scheduler.py --publish
+```
+
+**Pipeline Orchestration:**
+The scheduler successfully integrates all previous slices:
+1. **Slice 01 (Fetcher):** Fetches articles from configured RSS sources
+2. **Slice 02 (Summarizer):** Summarizes each article using AI (Claude/Ollama)
+3. **Slice 03 (Composer):** Composes LinkedIn-ready weekly post
+
+**Commit:** `feat(slice-04): implement scheduler with 96% test coverage`
+
 ---
 
 ## Upcoming Slices
-
-### 📋 Slice 04 - Scheduler
-**Goal:** Add APScheduler for Thu preview + Fri publish
-**Dependencies:** Slice 03
 
 ### 📋 Slice 05 - LinkedIn Publisher
 **Goal:** Implement OAuth + post creation with retries
@@ -218,4 +298,4 @@ This week's top stories in technology and artificial intelligence:
 ---
 
 **Last Updated:** 2025-11-10
-**Current Slice:** Slice 03 Complete - Ready for Slice 04
+**Current Slice:** Slice 04 Complete - Ready for Slice 05
