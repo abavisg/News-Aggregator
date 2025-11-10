@@ -69,17 +69,58 @@ This document tracks the incremental delivery of features (slices) for the Weekl
 
 **Commit:** `feat(slice-01): implement RSS feed fetcher with 90% test coverage`
 
+### ✅ Slice 02 - AI Summarizer (2025-11-10)
+
+**Summary:**
+- Implemented AI-powered article summarizer with dual provider support
+- Created 22 comprehensive unit tests following TDD principles
+- Achieved 100% test coverage (target: ≥90%)
+- All tests passing with proper mocking for API isolation
+
+**Features Implemented:**
+- `summarize_article()` - Main summarizer with auto-detection
+- `summarize_with_claude()` - Claude API integration with rate limit handling
+- `summarize_with_ollama()` - Local Ollama integration
+- `detect_provider()` - Auto-detect available AI provider from environment
+- `build_summary_prompt()` - Consistent prompt template generation
+- `count_tokens()` - Token estimation for cost tracking
+- Structured logging for all AI interactions
+- Graceful error handling with custom SummarizerError exception
+
+**Files Created/Modified:**
+- `features/slice-02-summarizer.md` - Feature specification
+- `src/core/summarizer.py` - Core summarizer implementation (274 lines)
+- `src/tests/unit/test_summarizer.py` - Comprehensive test suite (399 lines, 22 tests)
+- `requirements.txt` - Updated AI dependencies (anthropic 0.40.0, httpx 0.27.0, tiktoken 0.8.0)
+
+**Test Coverage:**
+- 22/22 tests passing
+- 100% code coverage on summarizer.py
+- All critical paths covered including:
+  - Both Claude and Ollama providers
+  - Auto-detection logic
+  - Rate limits and API errors
+  - Connection timeouts
+  - Invalid providers
+  - Token counting
+
+**Dependencies Added:**
+- anthropic==0.40.0 (updated from 0.7.8)
+- httpx==0.27.0 (updated from 0.25.2)
+- tiktoken==0.8.0 (new)
+
+**Integration:**
+Summarizer seamlessly integrates with Slice 01 fetcher output and supports both cloud (Claude) and local (Ollama) AI providers for flexibility.
+
+**Commit:** `feat(slice-02): implement AI summarizer with 100% test coverage`
+
 ---
 
 ## Upcoming Slices
 
-### 🔜 Slice 02 - AI Summarizer
-**Goal:** Add Claude API/Ollama integration for article summaries
-**ETA:** Next session
-**Dependencies:** Slice 01
-
-### 📋 Slice 03 - Weekly Composer
+### 🔜 Slice 03 - Weekly Composer
 **Goal:** Build LinkedIn-ready post from summaries
+**ETA:** Next session
 **Dependencies:** Slice 02
 
 ### 📋 Slice 04 - Scheduler
@@ -110,4 +151,4 @@ This document tracks the incremental delivery of features (slices) for the Weekl
 ---
 
 **Last Updated:** 2025-11-10
-**Current Slice:** Slice 01 Complete - Ready for Slice 02
+**Current Slice:** Slice 02 Complete - Ready for Slice 03
