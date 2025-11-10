@@ -237,13 +237,13 @@ python src/scripts/scheduler.py
 
 ### Completed
 - ✅ Phase 1: Project initialization and structure
+- ✅ Slice 01: RSS feed fetcher with tests (90% coverage)
+- ✅ Slice 02: AI summarizer (Claude/Ollama) (100% coverage)
 
 ### In Progress
-- 🔜 Slice 01: RSS feed fetcher with tests
+- 🔜 Slice 03: LinkedIn post composer
 
 ### Upcoming
-- 📋 Slice 02: AI summarizer (Claude/Ollama)
-- 📋 Slice 03: LinkedIn post composer
 - 📋 Slice 04: Scheduler implementation
 - 📋 Slice 05: LinkedIn publisher
 - 📋 Slice 06: Observability (logging, metrics)
@@ -275,4 +275,4 @@ Built with Claude Code following TDD/BDD best practices.
 ---
 
 **Last Updated:** 2025-11-10
-**Current Status:** Phase 1 Complete - Ready for Slice 01
+**Current Status:** Slice 02 Complete - Ready for Slice 03

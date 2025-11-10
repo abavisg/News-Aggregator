@@ -15,8 +15,9 @@ alembic==1.12.1
 apscheduler==3.10.4
 
 # AI Integration
-anthropic==0.7.8  # Claude API
-httpx==0.25.2  # For Ollama local calls
+anthropic==0.40.0  # Claude API
+httpx==0.27.0  # For Ollama local calls
+tiktoken==0.8.0  # Token counting for cost tracking
 
 # LinkedIn OAuth & Publishing
 requests==2.31.0
