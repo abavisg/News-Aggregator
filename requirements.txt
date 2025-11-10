@@ -1,0 +1,44 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# RSS Feed parsing
+feedparser==6.0.10
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# Scheduling
+apscheduler==3.10.4
+
+# AI Integration
+anthropic==0.7.8  # Claude API
+httpx==0.25.2  # For Ollama local calls
+
+# LinkedIn OAuth & Publishing
+requests==2.31.0
+oauthlib==3.2.2
+requests-oauthlib==1.3.1
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+behave==1.2.6
+
+# Code quality
+ruff==0.1.6
+black==23.11.0
+mypy==1.7.1
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2023.3
+python-dotenv==1.0.0
+
+# Logging & Observability
+structlog==23.2.0
