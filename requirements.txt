@@ -6,6 +6,7 @@ pydantic-settings==2.1.0
 
 # RSS Feed parsing
 feedparser==6.0.10
+beautifulsoup4==4.12.2  # For HTML parsing in source discovery
 
 # Database
 sqlalchemy==2.0.23
