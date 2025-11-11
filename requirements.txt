@@ -43,3 +43,4 @@ python-dotenv==1.0.0
 
 # Logging & Observability
 structlog==23.2.0
+psutil==5.9.6  # System and process utilities for health checks

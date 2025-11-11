@@ -9,18 +9,20 @@ Provides REST API endpoints for:
 """
 
 import os
+import psutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import structlog
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from src.core.publisher import LinkedInPublisher, PublisherError
+from src.core.observability import get_metrics_collector, get_alert_manager, get_logger
 
 logger = structlog.get_logger()
 
@@ -35,6 +37,10 @@ app = FastAPI(
 publisher = LinkedInPublisher(
     dry_run=os.getenv("DRY_RUN", "false").lower() == "true"
 )
+
+# Initialize observability components
+metrics_collector = get_metrics_collector()
+alert_manager = get_alert_manager()
 
 # Templates directory
 templates_dir = Path(__file__).parent / "templates"
@@ -444,6 +450,156 @@ async def get_statistics():
         logger.error("get_statistics_error", error=str(e))
         raise HTTPException(
             status_code=500, detail=f"Failed to get statistics: {str(e)}"
+        )
+
+
+# Observability Endpoints
+
+
+@app.get("/v1/metrics")
+async def get_metrics():
+    """
+    Get all metrics in JSON format.
+
+    Returns:
+        Dictionary of all collected metrics
+    """
+    try:
+        metrics = metrics_collector.get_all_metrics()
+        logger.info("get_metrics", metric_count=len(metrics))
+        return metrics
+    except Exception as e:
+        logger.error("get_metrics_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get metrics: {str(e)}"
+        )
+
+
+@app.get("/v1/metrics/prometheus", response_class=Response)
+async def get_metrics_prometheus():
+    """
+    Get metrics in Prometheus exposition format.
+
+    Returns:
+        Prometheus-formatted metrics as plain text
+    """
+    try:
+        prometheus_output = metrics_collector.export_prometheus()
+        logger.info("get_metrics_prometheus")
+        return Response(content=prometheus_output, media_type="text/plain")
+    except Exception as e:
+        logger.error("get_metrics_prometheus_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to export Prometheus metrics: {str(e)}"
+        )
+
+
+@app.get("/v1/alerts")
+async def get_alerts():
+    """
+    Get active alerts.
+
+    Returns:
+        List of currently active alerts
+    """
+    try:
+        active_alerts = alert_manager.get_active_alerts()
+        logger.info("get_alerts", alert_count=len(active_alerts))
+        return {"alerts": active_alerts, "count": len(active_alerts)}
+    except Exception as e:
+        logger.error("get_alerts_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get alerts: {str(e)}"
+        )
+
+
+@app.post("/v1/alerts/{name}/acknowledge")
+async def acknowledge_alert(name: str):
+    """
+    Acknowledge an alert.
+
+    Args:
+        name: Name of the alert to acknowledge
+
+    Returns:
+        Acknowledgment confirmation
+    """
+    try:
+        alert_manager.acknowledge_alert(name)
+        logger.info("alert_acknowledged", alert_name=name)
+        return {"status": "acknowledged", "alert_name": name}
+    except Exception as e:
+        logger.error("acknowledge_alert_error", alert_name=name, error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to acknowledge alert: {str(e)}"
+        )
+
+
+@app.get("/v1/health")
+async def health_check():
+    """
+    Comprehensive health check with system status.
+
+    Returns:
+        Health status with metrics, alerts, and system info
+    """
+    try:
+        # Evaluate alerts
+        alerts = alert_manager.get_active_alerts()
+
+        # Get key metrics
+        all_metrics = metrics_collector.get_all_metrics()
+
+        # Get system info
+        try:
+            disk_usage = psutil.disk_usage(".")
+            disk_space_mb = disk_usage.free / (1024 * 1024)
+        except Exception:
+            disk_space_mb = None
+
+        # Determine health status
+        if len(alerts) > 0:
+            critical_alerts = [a for a in alerts if a.get("severity") == "critical"]
+            if len(critical_alerts) > 0:
+                status = "unhealthy"
+            else:
+                status = "degraded"
+        else:
+            status = "healthy"
+
+        # Calculate log size
+        logs_dir = Path("./logs")
+        log_size_mb = 0
+        if logs_dir.exists():
+            log_size_mb = sum(f.stat().st_size for f in logs_dir.rglob("*.log")) / (
+                1024 * 1024
+            )
+
+        health_response = {
+            "status": status,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "metrics": {
+                k: v.get("value", v) for k, v in all_metrics.items()
+            },
+            "alerts": alerts,
+            "system": {
+                "disk_space_mb": disk_space_mb,
+                "log_size_mb": round(log_size_mb, 2),
+            },
+        }
+
+        logger.info(
+            "health_check",
+            status=status,
+            alert_count=len(alerts),
+            metric_count=len(all_metrics),
+        )
+
+        return health_response
+    except Exception as e:
+        logger.error("health_check_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Health check failed: {str(e)}"
         )
 
 
