@@ -217,12 +217,127 @@ on:
     - cron: "0 10 * * FRI"
 ```
 
-### Docker
+### Docker (Recommended for Deployment)
 
-Build and run with Docker:
+#### Prerequisites
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+
+#### Quick Start with Docker Compose
+
+1. **Set up environment variables:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys and configuration
+   ```
+
+2. **Run in different modes:**
+
+   **Scheduler Only** (automated weekly jobs):
+   ```bash
+   docker-compose --profile scheduler up -d
+   ```
+
+   **API Server Only** (dashboard and REST API):
+   ```bash
+   docker-compose --profile api up -d
+   # Access at http://localhost:8000
+   ```
+
+   **Full Mode** (API + Scheduler):
+   ```bash
+   docker-compose --profile full up -d
+   ```
+
+   **With PostgreSQL** (production-like setup):
+   ```bash
+   docker-compose --profile scheduler --profile postgres up -d
+   ```
+
+3. **View logs:**
+   ```bash
+   docker-compose logs -f scheduler  # or api, or app
+   ```
+
+4. **Stop services:**
+   ```bash
+   docker-compose --profile scheduler down
+   ```
+
+#### Manual Docker Build
+
+Build the image:
 ```bash
 docker build -t news-aggregator .
-docker run -d --env-file .env news-aggregator
+```
+
+Run scheduler:
+```bash
+docker run -d \
+  --name news-aggregator \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  news-aggregator
+```
+
+Run API server:
+```bash
+docker run -d \
+  --name news-aggregator-api \
+  --env-file .env \
+  -p 8000:8000 \
+  -v $(pwd)/data:/app/data \
+  news-aggregator \
+  uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+```
+
+Run one-time job:
+```bash
+docker run --rm \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  news-aggregator \
+  python src/scripts/scheduler.py --once
+```
+
+#### Docker Environment Variables
+
+Create `.env` file with:
+```env
+# AI Provider
+ANTHROPIC_API_KEY=your_claude_api_key
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+
+# LinkedIn OAuth
+LINKEDIN_CLIENT_ID=your_client_id
+LINKEDIN_CLIENT_SECRET=your_client_secret
+LINKEDIN_REDIRECT_URI=http://localhost:8000/callback
+
+# Database (PostgreSQL)
+DATABASE_URL=postgresql://newsaggregator:changeme123@db:5432/news_aggregator
+# Or SQLite (default)
+DATABASE_URL=sqlite:///./data/news_aggregator.db
+
+# Scheduler
+TIMEZONE=Europe/London
+PREVIEW_TIME=18:00
+PUBLISH_TIME=10:00
+```
+
+#### Production Deployment
+
+For production, use Docker Compose with PostgreSQL:
+```bash
+# Set secure database password
+export DB_PASSWORD=your_secure_password
+
+# Run with PostgreSQL
+docker-compose --profile full --profile postgres up -d
+
+# Check health
+docker-compose ps
+docker-compose logs -f app
 ```
 
 ### Local Production

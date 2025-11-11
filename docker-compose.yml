@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (optional, for production-like setup)
+  db:
+    image: postgres:15-alpine
+    container_name: news-aggregator-db
+    environment:
+      POSTGRES_DB: news_aggregator
+      POSTGRES_USER: newsaggregator
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsaggregator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles:
+      - postgres
+
+  # News Aggregator - Scheduler Mode
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-aggregator-scheduler
+    env_file:
+      - .env
+    environment:
+      # Override with PostgreSQL if using db service
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/news_aggregator.db}
+      TIMEZONE: ${TIMEZONE:-Europe/London}
+      PREVIEW_TIME: ${PREVIEW_TIME:-18:00}
+      PUBLISH_TIME: ${PUBLISH_TIME:-10:00}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+    command: python src/scripts/scheduler.py
+    profiles:
+      - scheduler
+
+  # News Aggregator - API Server Mode
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-aggregator-api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/news_aggregator.db}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    profiles:
+      - api
+
+  # Combined mode - both API and Scheduler
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-aggregator-app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/news_aggregator.db}
+      TIMEZONE: ${TIMEZONE:-Europe/London}
+      PREVIEW_TIME: ${PREVIEW_TIME:-18:00}
+      PUBLISH_TIME: ${PUBLISH_TIME:-10:00}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+    command: >
+      sh -c "uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
+             python src/scripts/scheduler.py"
+    profiles:
+      - full
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: news-aggregator-network
