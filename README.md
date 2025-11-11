@@ -240,12 +240,10 @@ python src/scripts/scheduler.py
 - ✅ Slice 01: RSS feed fetcher with tests (90% coverage)
 - ✅ Slice 02: AI summarizer (Claude/Ollama) (100% coverage)
 - ✅ Slice 03: LinkedIn post composer (90% coverage)
-
-### In Progress
-- 🔜 Slice 04: Scheduler implementation
+- ✅ Slice 04: Scheduler with APScheduler (96% coverage)
+- ✅ Slice 05: LinkedIn publisher with dashboard (comprehensive coverage)
 
 ### Upcoming
-- 📋 Slice 05: LinkedIn publisher
 - 📋 Slice 06: Observability (logging, metrics)
 - 📋 Slice 07: Source discovery agent
 
@@ -275,4 +273,4 @@ Built with Claude Code following TDD/BDD best practices.
 ---
 
 **Last Updated:** 2025-11-10
-**Current Status:** Slice 03 Complete - Ready for Slice 04
+**Current Status:** Slice 05 Complete - Ready for Slice 06

@@ -72,3 +72,6 @@ secrets/
 credentials/
 *.pem
 *.key
+
+# Local data storage (posts, credentials)
+data/
