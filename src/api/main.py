@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from src.core.publisher import LinkedInPublisher, PublisherError
 from src.core.observability import get_metrics_collector, get_alert_manager, get_logger
+from src.core.source_discovery import SourceDiscoveryAgent, SourceStatus
 
 logger = structlog.get_logger()
 
@@ -41,6 +42,9 @@ publisher = LinkedInPublisher(
 # Initialize observability components
 metrics_collector = get_metrics_collector()
 alert_manager = get_alert_manager()
+
+# Initialize source discovery agent
+discovery_agent = SourceDiscoveryAgent()
 
 # Templates directory
 templates_dir = Path(__file__).parent / "templates"
@@ -600,6 +604,229 @@ async def health_check():
         logger.error("health_check_error", error=str(e))
         raise HTTPException(
             status_code=500, detail=f"Health check failed: {str(e)}"
+        )
+
+
+# Source Discovery Endpoints (Slice 07)
+
+
+@app.get("/v1/sources/candidates")
+async def get_source_candidates(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    min_score: Optional[float] = Query(None, description="Minimum relevance score"),
+):
+    """
+    Get source candidates with optional filters.
+
+    Args:
+        status: candidate|approved|deprecated|rejected
+        min_score: Minimum relevance score (0.0-1.0)
+
+    Returns:
+        List of source candidates matching criteria
+    """
+    try:
+        status_enum = SourceStatus(status) if status else None
+        candidates = discovery_agent.get_candidates(
+            status=status_enum,
+            min_score=min_score
+        )
+
+        logger.info(
+            "get_source_candidates",
+            candidate_count=len(candidates),
+            status_filter=status,
+            min_score_filter=min_score
+        )
+
+        return {
+            "candidates": [
+                {
+                    "domain": c.domain,
+                    "feed_url": c.feed_url,
+                    "status": c.status.value,
+                    "discovered_from": c.discovered_from,
+                    "discovered_at": c.discovered_at.isoformat(),
+                    "relevance_score": c.relevance_score,
+                    "overlap_score": c.overlap_score,
+                    "quality_score": c.quality_score,
+                    "last_evaluated": c.last_evaluated.isoformat() if c.last_evaluated else None,
+                    "evaluation_count": c.evaluation_count,
+                }
+                for c in candidates
+            ],
+            "count": len(candidates)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid status value: {str(e)}")
+    except Exception as e:
+        logger.error("get_source_candidates_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get source candidates: {str(e)}"
+        )
+
+
+@app.post("/v1/sources/discover")
+async def run_discovery():
+    """
+    Manually trigger source discovery cycle.
+
+    Returns:
+        Summary of discovered and evaluated sources
+    """
+    try:
+        logger.info("run_discovery_triggered")
+        result = discovery_agent.run_discovery_cycle()
+
+        logger.info(
+            "run_discovery_completed",
+            discovered_count=result["discovered_count"],
+            evaluated_count=result["evaluated_count"],
+            recommended_count=result["recommended_count"]
+        )
+
+        return {
+            "success": True,
+            "discovered_count": result["discovered_count"],
+            "evaluated_count": result["evaluated_count"],
+            "recommended_count": result["recommended_count"],
+            "message": f"Discovered {result['discovered_count']} sources, evaluated {result['evaluated_count']}, found {result['recommended_count']} recommended"
+        }
+    except Exception as e:
+        logger.error("run_discovery_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to run discovery: {str(e)}"
+        )
+
+
+@app.post("/v1/sources/approve")
+async def approve_source(feed_url: str = Query(..., description="Feed URL to approve")):
+    """
+    Approve a candidate source for use in fetcher.
+
+    Args:
+        feed_url: URL of RSS feed to approve
+
+    Returns:
+        Approval confirmation
+    """
+    try:
+        discovery_agent.approve_source(feed_url)
+
+        logger.info("source_approved", feed_url=feed_url)
+
+        return {
+            "success": True,
+            "status": "approved",
+            "feed_url": feed_url,
+            "message": f"Source {feed_url} approved successfully"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("approve_source_error", feed_url=feed_url, error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to approve source: {str(e)}"
+        )
+
+
+@app.post("/v1/sources/reject")
+async def reject_source(
+    feed_url: str = Query(..., description="Feed URL to reject"),
+    reason: Optional[str] = Query(None, description="Rejection reason")
+):
+    """
+    Reject a candidate source.
+
+    Args:
+        feed_url: URL of RSS feed to reject
+        reason: Optional reason for rejection
+
+    Returns:
+        Rejection confirmation
+    """
+    try:
+        discovery_agent.reject_source(feed_url, reason)
+
+        logger.info("source_rejected", feed_url=feed_url, reason=reason)
+
+        return {
+            "success": True,
+            "status": "rejected",
+            "feed_url": feed_url,
+            "reason": reason,
+            "message": f"Source {feed_url} rejected"
+        }
+    except Exception as e:
+        logger.error("reject_source_error", feed_url=feed_url, error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reject source: {str(e)}"
+        )
+
+
+@app.get("/v1/sources/approved")
+async def get_approved_sources():
+    """
+    Get list of approved sources for fetcher.
+
+    Returns:
+        List of approved RSS sources
+    """
+    try:
+        sources = discovery_agent.get_candidates(status=SourceStatus.APPROVED)
+
+        logger.info("get_approved_sources", count=len(sources))
+
+        return {
+            "sources": [
+                {
+                    "domain": s.domain,
+                    "feed_url": s.feed_url,
+                    "relevance_score": s.relevance_score,
+                    "overlap_score": s.overlap_score,
+                    "quality_score": s.quality_score,
+                    "discovered_at": s.discovered_at.isoformat(),
+                    "last_evaluated": s.last_evaluated.isoformat() if s.last_evaluated else None
+                }
+                for s in sources
+            ],
+            "count": len(sources)
+        }
+    except Exception as e:
+        logger.error("get_approved_sources_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get approved sources: {str(e)}"
+        )
+
+
+@app.post("/v1/sources/deprecate-inactive")
+async def deprecate_inactive_sources(
+    days: int = Query(30, description="Days without new content before deprecation")
+):
+    """
+    Mark inactive sources as deprecated.
+
+    Args:
+        days: Days without new content before deprecation (default: 30)
+
+    Returns:
+        List of deprecated sources
+    """
+    try:
+        deprecated = discovery_agent.deprecate_inactive_sources(days_inactive=days)
+
+        logger.info("deprecate_inactive_sources", deprecated_count=len(deprecated), days_threshold=days)
+
+        return {
+            "success": True,
+            "deprecated_count": len(deprecated),
+            "deprecated_urls": deprecated,
+            "message": f"Deprecated {len(deprecated)} inactive sources"
+        }
+    except Exception as e:
+        logger.error("deprecate_inactive_sources_error", error=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Failed to deprecate sources: {str(e)}"
         )
 
 
