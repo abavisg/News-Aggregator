@@ -132,9 +132,9 @@ def mock_oauth_response():
 
 @pytest.fixture
 def mock_linkedin_post_response():
-    """Mock LinkedIn post creation response"""
+    """Mock LinkedIn post creation response - fake URN for testing"""
     return {
-        "id": "urn:li:share:1234567890",
+        "id": "urn:li:share:MOCK_POST_ID_FOR_TESTING",
         "created": {"time": 1699459200000},
     }
 
@@ -599,12 +599,12 @@ def test_publish_post_success(
 
         assert result["success"] is True
         assert result["status"] == "published"
-        assert result["post_id"] == "urn:li:share:1234567890"
+        assert result["post_id"] == "urn:li:share:MOCK_POST_ID_FOR_TESTING"
 
         # Verify post updated
         post = publisher.load_post(week_key)
         assert post["status"] == "published"
-        assert post["linkedin_post_id"] == "urn:li:share:1234567890"
+        assert post["linkedin_post_id"] == "urn:li:share:MOCK_POST_ID_FOR_TESTING"
 
 
 def test_publish_post_network_error_retries(publisher, sample_post_content, temp_credentials_dir):
