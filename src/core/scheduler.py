@@ -21,6 +21,7 @@ from src.core.fetcher import fetch_news
 from src.core.summarizer import summarize_article
 from src.core.composer import compose_weekly_post
 from src.core.publisher import LinkedInPublisher
+from src.core.source_discovery import SourceDiscoveryAgent
 
 # Setup structured logging
 log = structlog.get_logger(__name__)
@@ -89,6 +90,11 @@ class NewsAggregatorScheduler:
         # Initialize publisher
         self.publisher = LinkedInPublisher(
             dry_run=os.getenv("DRY_RUN", "false").lower() == "true"
+        )
+
+        # Initialize source discovery agent (Slice 07)
+        self.discovery_agent = SourceDiscoveryAgent(
+            auto_approve=os.getenv("AUTO_APPROVE_SOURCES", "false").lower() == "true"
         )
 
         log.info(
@@ -195,6 +201,28 @@ class NewsAggregatorScheduler:
             "Publish job scheduled",
             day="Friday",
             time=self.publish_time,
+            timezone=self.timezone
+        )
+
+        # Schedule source discovery job (Slice 07) - Runs every Monday at 09:00
+        self.scheduler.add_job(
+            func=self.run_discovery_job,
+            trigger=CronTrigger(
+                day_of_week=0,  # Monday (0=Monday)
+                hour=9,
+                minute=0,
+                timezone=self.timezone
+            ),
+            id="discovery_job",
+            name="Weekly Source Discovery",
+            replace_existing=True,
+            max_instances=1
+        )
+
+        log.info(
+            "Source discovery job scheduled",
+            day="Monday",
+            time="09:00",
             timezone=self.timezone
         )
 
@@ -361,6 +389,64 @@ class NewsAggregatorScheduler:
             week_key=week_key,
             status=result["status"],
             published=result.get("published", False),
+            duration_seconds=result["duration_seconds"]
+        )
+
+        return result
+
+    def run_discovery_job(self) -> Dict:
+        """
+        Execute source discovery workflow (Slice 07).
+
+        Discovers and evaluates new RSS sources for the aggregator.
+
+        Returns:
+            Job execution result dictionary
+        """
+        log.info("Starting source discovery job")
+
+        start_time = datetime.now()
+        result = {
+            "status": "success",
+            "discovered_count": 0,
+            "evaluated_count": 0,
+            "recommended_count": 0,
+            "start_time": start_time.isoformat(),
+            "duration_seconds": 0
+        }
+
+        try:
+            # Run discovery cycle
+            discovery_result = self.discovery_agent.run_discovery_cycle()
+
+            result["discovered_count"] = discovery_result["discovered_count"]
+            result["evaluated_count"] = discovery_result["evaluated_count"]
+            result["recommended_count"] = discovery_result["recommended_count"]
+
+            log.info(
+                "Source discovery completed",
+                discovered_count=discovery_result["discovered_count"],
+                evaluated_count=discovery_result["evaluated_count"],
+                recommended_count=discovery_result["recommended_count"]
+            )
+
+        except Exception as e:
+            log.error(
+                "Source discovery job failed",
+                error=str(e),
+                exc_info=True
+            )
+            result["status"] = "error"
+            result["error"] = str(e)
+
+        # Calculate duration
+        end_time = datetime.now()
+        result["end_time"] = end_time.isoformat()
+        result["duration_seconds"] = (end_time - start_time).total_seconds()
+
+        log.info(
+            "Source discovery job completed",
+            status=result["status"],
             duration_seconds=result["duration_seconds"]
         )
 
